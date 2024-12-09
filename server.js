@@ -27,7 +27,6 @@ const Name = mongoose.model('Name', new mongoose.Schema({
     source: String,
     column1: String,
     column2: String,
-    column3: String,
     column4: String,
     column5: String
 }));
@@ -44,8 +43,8 @@ app.get('/', (req, res) => {
 // Add a name manually
 app.post('/add-name', async (req, res) => {
     try {
-        const { name, category } = req.body;
-        const newName = new Name({ name, category, source: 'manual' });
+        const { name, category, column1, column2, column4, column5 } = req.body;
+        const newName = new Name({ name, category, column1, column2, column4, column5, source: 'manual' });
         await newName.save();
         res.status(201).send(newName);
     } catch (error) {
@@ -61,7 +60,15 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
         .on('data', (data) => results.push(data))
         .on('end', async () => {
             try {
-                const names = results.map(row => ({ name: row.name, category: row.category || 'Uncategorized', source: 'csv' }));
+                const names = results.map(row => ({
+                    column1: row.column1,
+                    column2: row.column2,
+                    name: row.name,
+                    column4: row.column4,
+                    column5: row.column5,
+                    category: row.category || 'Uncategorized',
+                    source: 'csv'
+                }));
                 await Name.insertMany(names);
                 res.status(201).send(names);
             } catch (error) {
@@ -72,24 +79,27 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
 
 // Upload and process image with OCR
 app.post('/upload/image', upload.single('file'), (req, res) => {
-    tesseract.recognize(req.file.path, 'eng')
-        .then(async ({ data: { text } }) => {
-            const rows = text.split('\n').map(row => row.split('\t')); // Assuming tab-separated values
-            const names = rows.map(columns => ({
-                column1: columns[0],
-                column2: columns[1],
-                name: columns[2],
-                column4: columns[3],
-                column5: columns[4],
-                category: 'Uncategorized',
-                source: 'ocr'
-            }));
-            await Name.insertMany(names);
-            res.status(201).send(names);
-        })
-        .catch(error => {
-            res.status(500).send({ error: 'Failed to process image' });
-        });
+    tesseract.recognize(req.file.path, 'eng', {
+        langPath: './tessdata', // Path to the directory containing the traineddata files
+        logger: m => console.log(m) // Optional logger to see progress
+    })
+    .then(async ({ data: { text } }) => {
+        const rows = text.split('\n').map(row => row.split('\t')); // Assuming tab-separated values
+        const names = rows.map(columns => ({
+            column1: columns[0],
+            column2: columns[1],
+            name: columns[2],
+            column4: columns[3],
+            column5: columns[4],
+            category: 'Uncategorized',
+            source: 'ocr'
+        }));
+        await Name.insertMany(names);
+        res.status(201).send(names);
+    })
+    .catch(error => {
+        res.status(500).send({ error: 'Failed to process image' });
+    });
 });
 
 // Fetch all pending names
