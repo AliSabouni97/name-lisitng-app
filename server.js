@@ -24,7 +24,12 @@ connectDB().then(() => console.log('MongoDB connected')).catch(err => console.er
 const Name = mongoose.model('Name', new mongoose.Schema({
     name: String,
     category: String,
-    source: String
+    source: String,
+    column1: String,
+    column2: String,
+    column3: String,
+    column4: String,
+    column5: String
 }));
 
 const Category = mongoose.model('Category', new mongoose.Schema({
@@ -69,7 +74,16 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
 app.post('/upload/image', upload.single('file'), (req, res) => {
     tesseract.recognize(req.file.path, 'eng')
         .then(async ({ data: { text } }) => {
-            const names = text.split('\n').map(name => ({ name: name.trim(), category: 'Uncategorized', source: 'ocr' }));
+            const rows = text.split('\n').map(row => row.split('\t')); // Assuming tab-separated values
+            const names = rows.map(columns => ({
+                column1: columns[0],
+                column2: columns[1],
+                name: columns[2],
+                column4: columns[3],
+                column5: columns[4],
+                category: 'Uncategorized',
+                source: 'ocr'
+            }));
             await Name.insertMany(names);
             res.status(201).send(names);
         })
