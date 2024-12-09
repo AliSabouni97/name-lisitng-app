@@ -80,7 +80,7 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
 // Upload and process image with OCR
 app.post('/upload/image', upload.single('file'), async (req, res) => {
     const fetch = (await import('node-fetch')).default;
-    tesseract.recognize(req.file.path, 'eng', {
+    tesseract.recognize(req.file.path, 'ara', {
         langPath: './tessdata', // Path to the directory containing the traineddata files
         logger: m => console.log(m) // Optional logger to see progress
     })
@@ -99,6 +99,7 @@ app.post('/upload/image', upload.single('file'), async (req, res) => {
         res.status(201).send(names);
     })
     .catch(error => {
+        console.error('Error processing image:', error);
         res.status(500).send({ error: 'Failed to process image' });
     });
 });
