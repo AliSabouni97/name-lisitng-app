@@ -1,15 +1,17 @@
 const express = require('express');
 const multer = require('multer');
 const csv = require('csv-parser');
-const tesseract = require('tesseract.js');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const mongoose = require('mongoose');
+const path = require('path');
+const cors = require('cors'); // Import the cors package
 
 // Initialize app and middleware
 const app = express();
 const upload = multer({ dest: 'uploads/' }); // Temporary folder for uploads
 app.use(bodyParser.json());
+app.use(cors()); // Enable CORS
 
 // MongoDB connection
 const connectDB = async () => {
@@ -22,17 +24,13 @@ connectDB().then(() => console.log('MongoDB connected')).catch(err => console.er
 
 // Models
 const Name = mongoose.model('Name', new mongoose.Schema({
+    id: Number,
+    area: String,
+    code: Number,
     name: String,
-    category: String,
-    source: String,
-    column1: String,
-    column2: String,
-    column4: String,
-    column5: String
-}));
-
-const Category = mongoose.model('Category', new mongoose.Schema({
-    name: String
+    mothersName: String,
+    status: String,
+    source: String
 }));
 
 // Basic route for testing
@@ -43,8 +41,8 @@ app.get('/', (req, res) => {
 // Add a name manually
 app.post('/add-name', async (req, res) => {
     try {
-        const { name, category, column1, column2, column4, column5 } = req.body;
-        const newName = new Name({ name, category, column1, column2, column4, column5, source: 'manual' });
+        const { id, area, code, name, mothersName, status } = req.body;
+        const newName = new Name({ id, area, code, name, mothersName, status, source: 'manual' });
         await newName.save();
         res.status(201).send(newName);
     } catch (error) {
@@ -61,12 +59,12 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
         .on('end', async () => {
             try {
                 const names = results.map(row => ({
-                    column1: row.column1,
-                    column2: row.column2,
+                    id: parseInt(row.id, 10),
+                    area: row.area,
+                    code: parseInt(row.code, 10),
                     name: row.name,
-                    column4: row.column4,
-                    column5: row.column5,
-                    category: row.category || 'Uncategorized',
+                    mothersName: row.mothersName,
+                    status: row.status,
                     source: 'csv'
                 }));
                 await Name.insertMany(names);
@@ -75,33 +73,6 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
                 res.status(500).send({ error: 'Failed to process CSV' });
             }
         });
-});
-
-// Upload and process image with OCR
-app.post('/upload/image', upload.single('file'), async (req, res) => {
-    const fetch = (await import('node-fetch')).default;
-    tesseract.recognize(req.file.path, 'ara', {
-        langPath: './tessdata', // Path to the directory containing the traineddata files
-        logger: m => console.log(m) // Optional logger to see progress
-    })
-    .then(async ({ data: { text } }) => {
-        const rows = text.split('\n').map(row => row.split('\t')); // Assuming tab-separated values
-        const names = rows.map(columns => ({
-            column1: columns[0],
-            column2: columns[1],
-            name: columns[2],
-            column4: columns[3],
-            column5: columns[4],
-            category: 'Uncategorized',
-            source: 'ocr'
-        }));
-        await Name.insertMany(names);
-        res.status(201).send(names);
-    })
-    .catch(error => {
-        console.error('Error processing image:', error);
-        res.status(500).send({ error: 'Failed to process image' });
-    });
 });
 
 // Fetch all pending names
@@ -132,27 +103,6 @@ app.get('/names', async (req, res) => {
         res.status(200).send(verifiedNames);
     } catch (error) {
         res.status(500).send({ error: 'Failed to fetch verified names' });
-    }
-});
-
-// Add and fetch categories
-app.post('/categories', async (req, res) => {
-    try {
-        const { name } = req.body;
-        const newCategory = new Category({ name });
-        await newCategory.save();
-        res.status(201).send(newCategory);
-    } catch (error) {
-        res.status(500).send({ error: 'Failed to add category' });
-    }
-});
-
-app.get('/categories', async (req, res) => {
-    try {
-        const categories = await Category.find();
-        res.status(200).send(categories);
-    } catch (error) {
-        res.status(500).send({ error: 'Failed to fetch categories' });
     }
 });
 
