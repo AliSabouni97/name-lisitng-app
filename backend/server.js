@@ -5,13 +5,15 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const path = require('path');
-const cors = require('cors'); // Import the cors package
+const cors = require('cors');
+const { authCheck, adminCheck } = require('./authMiddleware');
+const authRoutes = require('./authRoutes');
 
 // Initialize app and middleware
 const app = express();
 const upload = multer({ dest: 'uploads/' }); // Temporary folder for uploads
 app.use(bodyParser.json());
-app.use(cors()); // Enable CORS
+app.use(cors());
 
 // MongoDB connection
 const connectDB = async () => {
@@ -30,7 +32,8 @@ const Name = mongoose.model('Name', new mongoose.Schema({
     name: String,
     mothersName: String,
     status: String,
-    source: String
+    source: String,
+    isApproved: { type: Boolean, default: false } // Add the isApproved field
 }));
 
 // Basic route for testing
@@ -38,8 +41,11 @@ app.get('/', (req, res) => {
     res.send('Names Review App is running!');
 });
 
-// Add a name manually
-app.post('/add-name', async (req, res) => {
+// Authentication routes
+app.use('/auth', authRoutes);
+
+// Add a name manually (admin only)
+app.post('/add-name', adminCheck, async (req, res) => {
     try {
         const { id, area, code, name, mothersName, status } = req.body;
         const newName = new Name({ id, area, code, name, mothersName, status, source: 'manual' });
@@ -50,8 +56,8 @@ app.post('/add-name', async (req, res) => {
     }
 });
 
-// Upload and process CSV
-app.post('/upload/csv', upload.single('file'), (req, res) => {
+// Upload and process CSV (admin only)
+app.post('/upload/csv', adminCheck, upload.single('file'), (req, res) => {
     const results = [];
     fs.createReadStream(req.file.path)
         .pipe(csv())
@@ -75,31 +81,31 @@ app.post('/upload/csv', upload.single('file'), (req, res) => {
         });
 });
 
-// Fetch all pending names
-app.get('/pending', async (req, res) => {
+// Fetch all pending names (admin only)
+app.get('/pending', adminCheck, async (req, res) => {
     try {
-        const pendingNames = await Name.find({ source: { $ne: 'verified' } });
+        const pendingNames = await Name.find({ isApproved: false });
         res.status(200).send(pendingNames);
     } catch (error) {
         res.status(500).send({ error: 'Failed to fetch pending names' });
     }
 });
 
-// Verify names
-app.post('/verify', async (req, res) => {
+// Verify names (admin only)
+app.post('/verify', adminCheck, async (req, res) => {
     try {
         const { ids } = req.body;
-        await Name.updateMany({ _id: { $in: ids } }, { source: 'verified' });
+        await Name.updateMany({ _id: { $in: ids } }, { isApproved: true });
         res.status(200).send({ message: 'Names verified' });
     } catch (error) {
         res.status(500).send({ error: 'Failed to verify names' });
     }
 });
 
-// Fetch all verified names
+// Fetch all verified names (public)
 app.get('/names', async (req, res) => {
     try {
-        const verifiedNames = await Name.find({ source: 'verified' });
+        const verifiedNames = await Name.find({ isApproved: true });
         res.status(200).send(verifiedNames);
     } catch (error) {
         res.status(500).send({ error: 'Failed to fetch verified names' });

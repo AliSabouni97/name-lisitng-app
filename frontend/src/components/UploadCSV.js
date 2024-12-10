@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const UploadCSV = () => {
+const UploadCSV = ({ token }) => {
     const [file, setFile] = useState(null);
 
     const handleFileChange = (e) => {
@@ -17,7 +17,8 @@ const UploadCSV = () => {
         try {
             const response = await axios.post('http://localhost:3000/upload/csv', formData, {
                 headers: {
-                    'Content-Type': 'multipart/form-data'
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${token}`
                 }
             });
             console.log(response.data);
